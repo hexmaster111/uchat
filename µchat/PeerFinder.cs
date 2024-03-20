@@ -1,14 +1,23 @@
+using System.Collections;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
 namespace µchat;
 
+class Peer
+{
+    public string Name;
+    public DateTime LastSeenTime;
+    public IPAddress LastSeenAddress;
+}
+
 public class PeerFinder
 {
     private const int Port = 5150;
     private readonly UdpClient _c;
-    private readonly List<(IPAddress ip, string name)> _peers = new();
+    private readonly Dictionary<IPAddress, Peer> _peers = new();
     private readonly Task _listenrTask;
     private readonly string _userName = "";
     private readonly Timer _sendTmr;
@@ -23,20 +32,20 @@ public class PeerFinder
             MulticastLoopback = false
         };
 
-        _c.Client.Bind(new IPEndPoint(IPAddress.Any, Port));
+        _c.Client.Bind(new IPEndPoint(IPAddress.Parse("192.168.1.36"), Port));
         _listenrTask = Task.Run(PeerDetectorMethod);
 
         _sendTmr = new(Send);
-        _sendTmr.Change(0, 1500);
-        _listenrTask.Wait();
+        _sendTmr.Change(0, 5000);
     }
+
 
     private void Send(object? _)
     {
         var data = Encoding.UTF8.GetBytes(_userName);
         var send = _c.Send(data, data.Length, "255.255.255.255", Port);
         if (send <= 0) throw new Exception("Failed to send data");
-        Console.WriteLine($"Sent {send} bytes");
+        Debug.WriteLine($"Sent {send} bytes");
     }
 
     private Task? PeerDetectorMethod()
@@ -51,8 +60,21 @@ public class PeerFinder
             var remoteName = Encoding.UTF8.GetString(recBuff);
             //toss data from myself
             if (meIp.AddressList.Contains(from.Address) && remoteName == _userName) continue;
-            Console.WriteLine($"{remoteName}@{from.Address}");
-            _peers.Add((from.Address, remoteName));
+
+            var p = (from.Address, remoteName);
+            Debug.WriteLine($"{remoteName}@{from.Address}");
+            if (_peers.Any(x => x.Value.Name.SequenceEqual(p.remoteName) && Equals(x.Key, p.Address)))
+            {
+                _peers[p.Address].LastSeenTime = DateTime.Now;
+                continue;
+            }
+
+            _peers.Add(p.Address, new Peer()
+            {
+                LastSeenTime = DateTime.Now,
+                LastSeenAddress = p.Address,
+                Name = p.remoteName,
+            });
         }
     }
 }
