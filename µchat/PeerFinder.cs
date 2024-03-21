@@ -21,6 +21,7 @@ public class PeerFinder
     private readonly Task _listenrTask;
     private readonly string _userName = "";
     private readonly Timer _sendTmr;
+    internal IEnumerable<Peer> Peers => _peers.Values;
 
 
     public PeerFinder(string name)
