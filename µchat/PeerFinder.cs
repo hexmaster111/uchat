@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -6,11 +5,39 @@ using System.Text;
 
 namespace µchat;
 
-class Peer
+public struct Message
+{
+    public DateTime SentTime;
+    public PeerId From;
+    public string Text;
+
+    public bool Equals(Message other) => SentTime.Equals(other.SentTime) &&
+                                         From.Equals(other.From) && Text == other.Text;
+
+    public override bool Equals(object? obj) => obj is Message other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(SentTime, From, Text);
+    public static bool operator ==(Message left, Message right) => left.Equals(right);
+    public static bool operator !=(Message left, Message right) => !(left == right);
+}
+
+public struct PeerId
 {
     public string Name;
-    public DateTime LastSeenTime;
-    public IPAddress LastSeenAddress;
+    public IPAddress Address;
+
+    public override bool Equals(object? obj) => obj is PeerId id && Equals(id);
+    public bool Equals(PeerId other) => Name == other.Name && Address.Equals(other.Address);
+    public override int GetHashCode() => HashCode.Combine(Name, Address);
+
+    public static bool operator ==(PeerId left, PeerId right) => left.Equals(right);
+
+    public static bool operator !=(PeerId left, PeerId right) => !(left == right);
+}
+
+public class Peer
+{
+    public PeerId PeerId;
+    public DateTime LastSeen;
 }
 
 public class PeerFinder
@@ -64,17 +91,20 @@ public class PeerFinder
 
             var p = (from.Address, remoteName);
             Debug.WriteLine($"{remoteName}@{from.Address}");
-            if (_peers.Any(x => x.Value.Name.SequenceEqual(p.remoteName) && Equals(x.Key, p.Address)))
+            if (_peers.Any(x => x.Value.PeerId.Name.SequenceEqual(p.remoteName) && Equals(x.Key, p.Address)))
             {
-                _peers[p.Address].LastSeenTime = DateTime.Now;
+                _peers[p.Address].LastSeen = DateTime.Now;
                 continue;
             }
 
-            _peers.Add(p.Address, new Peer()
+            _peers.Add(p.Address, new Peer
             {
-                LastSeenTime = DateTime.Now,
-                LastSeenAddress = p.Address,
-                Name = p.remoteName,
+                LastSeen = DateTime.Now,
+                PeerId = new PeerId
+                {
+                    Address = p.Address,
+                    Name = p.remoteName,
+                }
             });
         }
     }

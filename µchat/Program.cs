@@ -1,6 +1,7 @@
 ﻿using µchat;
 
 string name = "Hailey";
+List<Message> messages = new();
 
 if (args.Length >= 1)
 {
@@ -24,39 +25,48 @@ while (true)
 }
 
 
+void DoCommand(string sayLine)
+{
+    Console.Write('\b');
+    for (var i = 0; i < sayLine.Length; i++) Console.Write('\b');
+
+    Console.WriteLine(
+        """
+        Commands:
+        (O)nline -- List the users who we have seen.
+        """);
+
+    var cmd = Console.ReadKey();
+    Console.Write('\b');
+    switch (cmd.Key)
+    {
+        case ConsoleKey.O:
+            foreach (var p in pf.Peers)
+            {
+                Console.WriteLine("(O)nline");
+                Console.WriteLine(p.PeerId.Name + " @ " + p.PeerId.Address + "  [ " + p.LastSeen + " ]");
+            }
+
+            break;
+
+        case ConsoleKey.Escape:
+        case ConsoleKey.Enter:
+            break;
+        default:
+            Console.WriteLine("Unknown Command!");
+            break;
+    }
+}
+
 void DoCli()
 {
     const char cmdChar = '/';
-    Console.Write('>');
+    var sayLine = $"say : ";
+    Console.Write(sayLine);
     var k = Console.ReadKey();
     if (k.KeyChar == cmdChar)
     {
-        Console.Write('\b');
-        Console.WriteLine(
-            """
-            Commands:
-            (O)nline -- List the users who we have seen.
-            """);
-
-        var cmd = Console.ReadKey();
-        Console.WriteLine();
-
-        switch (cmd.Key)
-        {
-            case ConsoleKey.O:
-                foreach (var p in pf.Peers)
-                {
-                    Console.WriteLine(p.Name + " @ " + p.LastSeenAddress + "  [ " + p.LastSeenTime + " ]");
-                }
-
-                break;
-
-            case ConsoleKey.Escape:
-            case ConsoleKey.Enter:
-            default:
-                Console.WriteLine("Unknown Command!");
-                break;
-        }
+        DoCommand(sayLine);
     }
     else
     {
