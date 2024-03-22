@@ -58,6 +58,11 @@ void DoCommand(string sayLine)
     }
 }
 
+void SendMessage(string msg)
+{
+    
+}
+
 void DoCli()
 {
     const char cmdChar = '/';
@@ -72,5 +77,6 @@ void DoCli()
     {
         var msg = k.KeyChar + Console.ReadLine();
         if (string.IsNullOrEmpty(msg)) return;
+        SendMessage(msg);
     }
 }
