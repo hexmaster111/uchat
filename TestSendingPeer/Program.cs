@@ -9,4 +9,4 @@ var trans = new P2PTransmission(new PeerId()
     Name = "Thinkpad"
 });
 
-Console.WriteLine("END OF PROGRAM");
+Console.WriteLine("End of program");

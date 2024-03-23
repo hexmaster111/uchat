@@ -5,10 +5,13 @@ using System.Text;
 
 namespace µchat;
 
-public class P2PTransmission
+public class P2PTransmission : IDisposable
 {
     private const int P2PPort = 5250;
     private const string MagicStringStart = "µchat-hps-ms-";
+
+    private readonly IPEndPoint _endpoint;
+    private readonly UdpClient _udpClient;
 
     enum MessageType : byte
     {
@@ -21,18 +24,18 @@ public class P2PTransmission
     public P2PTransmission()
     {
         retry:
-        var endpoint = new IPEndPoint(IPAddress.Any, P2PPort);
-        var udpClient = new UdpClient();
-        udpClient.Client.Bind(endpoint);
-        var str = Encoding.UTF32.GetString(udpClient.Receive(ref endpoint));
+        _endpoint = new IPEndPoint(IPAddress.Any, P2PPort);
+        _udpClient = new UdpClient();
+        _udpClient.Client.Bind(_endpoint);
+        var str = Encoding.UTF32.GetString(_udpClient.Receive(ref _endpoint));
         if (!str.StartsWith(MagicStringStart))
         {
-            udpClient.Close();
-            udpClient.Dispose();
+            _udpClient.Close();
+            _udpClient.Dispose();
             goto retry;
         }
-        
-        udpClient.Send(new[] { (byte)MessageType.HelloConnected }, endpoint);
+
+        _udpClient.Send(new[] { (byte)MessageType.HelloConnected }, _endpoint);
     }
 
 
@@ -42,8 +45,39 @@ public class P2PTransmission
     /// <param name="peer"></param>
     public P2PTransmission(PeerId peer)
     {
-        var udpClient = new UdpClient();
-        udpClient.Connect(new IPEndPoint(peer.Address, P2PPort));
-        udpClient.Send(Encoding.UTF32.GetBytes(MagicStringStart));
+        _udpClient = new UdpClient();
+        _endpoint = new IPEndPoint(peer.Address, P2PPort);
+        _udpClient.Connect(_endpoint);
+
+        var sendThread = new Thread(() =>
+        {
+            while (!Connected)
+            {
+                _udpClient.Send(Encoding.UTF32.GetBytes(MagicStringStart));
+                Thread.Sleep(1000);
+            }
+        });
+        sendThread.Start();
+
+        var resp = _udpClient.Receive(ref _endpoint);
+        var msgType = (MessageType)resp[0];
+        if (msgType == MessageType.HelloConnected)
+        {
+            Connected = true;
+            sendThread.Join();
+            return;
+        }
+
+        Dispose();
+        sendThread.Join();
+        throw new Exception("Client gave invalid response");
+    }
+
+    public bool Connected { get; private set; }
+    public bool Disposed { get; private set; }
+
+    public void Dispose()
+    {
+        Disposed = true;
     }
 }
