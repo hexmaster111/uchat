@@ -6,10 +6,9 @@ using System.Text;
 
 namespace µchat;
 
-
-public record ChatBroadCast(Message Message, ulong BroadCastId);
-
-public record AckNetMsg(ulong BroadCastId);
+public class ConcurrentDictionaryOfPeersByPeerId : ConcurrentDictionary<PeerId, P2PTransmission>
+{
+}
 
 public class PeerFinder
 {
@@ -19,23 +18,28 @@ public class PeerFinder
 
     private readonly Dictionary<IPAddress, Peer> _foundPeers = new();
 
+    //Shared from Main
+    private readonly ConcurrentDictionaryOfPeersByPeerId _openPeers;
+
     private readonly string _userName;
     private readonly UdpClient _c;
-    private readonly Task _listenrTask;
+    private readonly Task _listenerTask;
     private readonly Timer _sendTmr;
 
 
-    public PeerFinder(string name)
+    public PeerFinder(string name, ConcurrentDictionaryOfPeersByPeerId openPeers)
     {
         _userName = name;
-        _c = new()
+        _openPeers = openPeers;
+
+        _c = new UdpClient
         {
             ExclusiveAddressUse = false,
             MulticastLoopback = false
         };
 
         _c.Client.Bind(new IPEndPoint(IPAddress.Any, Port));
-        _listenrTask = Task.Run(PeerDetectorMethod);
+        _listenerTask = Task.Run(PeerDetectorMethod);
 
         _sendTmr = new(SendToEveryone);
         _sendTmr.Change(0, 5000);
@@ -91,6 +95,13 @@ public class PeerFinder
             {
                 throw new Exception("Ive found this peer already!");
             }
+
+
+            var pid = _foundPeers[from.Address].PeerId;
+
+            var p2PCon = new P2PTransmission(pid);
+
+            _openPeers.TryAdd(pid, p2PCon);
         }
     }
 }

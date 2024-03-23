@@ -1,8 +1,11 @@
-﻿using System.Security.Cryptography;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 using µchat;
 
 string name = "Hailey";
 List<Message> messages = new();
+ConcurrentDictionaryOfPeersByPeerId openPeerConnections = new();
 
 if (args.Length >= 1)
 {
@@ -11,7 +14,8 @@ if (args.Length >= 1)
 
 Console.WriteLine($"Name = {name}");
 Console.WriteLine("Listening for others...");
-var pf = new PeerFinder(name);
+var pf = new PeerFinder(name, openPeerConnections);
+new Thread(ConnectionHandlerMain) { IsBackground = true }.Start();
 
 while (true)
 {
@@ -76,5 +80,25 @@ void DoCli()
         var msg = k.KeyChar + Console.ReadLine();
         if (string.IsNullOrEmpty(msg)) return;
         SendMessage(msg);
+    }
+}
+
+[DoesNotReturn]
+void ConnectionHandlerMain()
+{
+    List<P2PTransmission> activeConnections = new();
+
+
+    while (true)
+    {
+        try
+        {
+            var p2PTransmission = new P2PTransmission();
+            activeConnections.Add(p2PTransmission);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex);
+        }
     }
 }

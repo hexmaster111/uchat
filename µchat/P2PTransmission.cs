@@ -85,7 +85,7 @@ public class P2PTransmission : IDisposable
 
                 Task.Delay(1000, cts.Token).Wait();
             }
-        });
+        }) { IsBackground = true };
 
 
         var readTask = _udpClient.ReceiveAsync(cts.Token).AsTask();
