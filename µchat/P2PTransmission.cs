@@ -38,6 +38,8 @@ public class P2PTransmission : IDisposable
             goto retry;
         }
 
+        _udpClient.Connect(_fromEndPoint);
+
         var ourNewPort = PortHelper.NextFreePort(P2PPort);
 
         var msg = new List<byte>
@@ -47,6 +49,12 @@ public class P2PTransmission : IDisposable
         msg.AddRange(MagicBytesA);
         msg.AddRange(Encoding.UTF32.GetBytes(ourNewPort.ToString()));
         _udpClient.Send(msg.ToArray());
+        _udpClient.Close();
+        _udpClient.Dispose();
+
+        _udpClient = new UdpClient(ourNewPort);
+        _fromEndPoint = new IPEndPoint(_fromEndPoint.Address, ourNewPort);
+        _udpClient.Connect(_fromEndPoint);
     }
 
 
@@ -105,12 +113,18 @@ public class P2PTransmission : IDisposable
 
         var magicBytes = resp[1..(MagicBytesALen + 1)];
         if (!magicBytes.SequenceEqual(MagicBytesA)) ThrowInvalidResponse();
-        
+
         var portStr = Encoding.UTF32.GetString(resp[(MagicBytesALen + 1)..]);
         if (!int.TryParse(portStr, out var port)) ThrowInvalidResponse();
 
         Connected = true;
         sendThread.Join();
+
+        _udpClient.Close();
+        _udpClient.Dispose();
+        _udpClient = new UdpClient(port);
+        _fromEndPoint = new IPEndPoint(_fromEndPoint.Address, port);
+        _udpClient.Connect(_fromEndPoint);
 
         return;
 
@@ -138,6 +152,8 @@ public static class PortHelper
     {
         IPGlobalProperties properties = IPGlobalProperties.GetIPGlobalProperties();
         IPEndPoint[] listeners = properties.GetActiveTcpListeners();
+        IPEndPoint[] listenersUDP = properties.GetActiveUdpListeners();
+        listeners = listeners.Concat(listenersUDP).ToArray();
         int[] openPorts = listeners.Select(item => item.Port).ToArray<int>();
         return openPorts.All(openPort => openPort != port);
     }
