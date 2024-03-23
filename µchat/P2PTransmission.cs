@@ -15,7 +15,7 @@ public class P2PTransmission : IDisposable
 
     enum MessageType : byte
     {
-        HelloConnected = 0x01
+        HelloConnected = 0x01,
     }
 
     /// <summary>
@@ -49,17 +49,46 @@ public class P2PTransmission : IDisposable
         _endpoint = new IPEndPoint(peer.Address, P2PPort);
         _udpClient.Connect(_endpoint);
 
+        var cts = new CancellationTokenSource();
+
         var sendThread = new Thread(() =>
         {
-            while (!Connected)
+            int connectionTry = 0;
+            while (!Connected && !Disposed)
             {
                 _udpClient.Send(Encoding.UTF32.GetBytes(MagicStringStart));
-                Thread.Sleep(1000);
+                connectionTry++;
+                if (connectionTry >= 5)
+                {
+                    cts.Cancel();
+                    break;
+                }
+
+                Task.Delay(1000, cts.Token).Wait();
             }
         });
+
+
+        var readTask = _udpClient.ReceiveAsync(cts.Token).AsTask();
         sendThread.Start();
 
-        var resp = _udpClient.Receive(ref _endpoint);
+        try
+        {
+            readTask.Wait(cts.Token);
+        }
+        catch (OperationCanceledException oce)
+        {
+            //Ignore
+        }
+
+        if (!readTask.IsCompletedSuccessfully)
+        {
+            Dispose();
+            sendThread.Join();
+            throw new Exception("Failed to connect :(");
+        }
+
+        var resp = readTask.Result.Buffer;
         var msgType = (MessageType)resp[0];
         if (msgType == MessageType.HelloConnected)
         {
