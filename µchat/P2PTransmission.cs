@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 
@@ -9,8 +10,10 @@ public class P2PTransmission : IDisposable
 {
     private const int P2PPort = 5250;
     private const string MagicStringStart = "µchat-hps-ms-";
+    private static readonly byte[] MagicBytesA = new byte[] { 0xDA, 0xDD, (byte)'Y', (byte)'S', 0xFF, (byte)'T' };
+    private static readonly int MagicBytesALen = MagicBytesA.Length;
 
-    private readonly IPEndPoint _endpoint;
+    private readonly IPEndPoint _fromEndPoint;
     private readonly UdpClient _udpClient;
 
     enum MessageType : byte
@@ -24,10 +27,10 @@ public class P2PTransmission : IDisposable
     public P2PTransmission()
     {
         retry:
-        _endpoint = new IPEndPoint(IPAddress.Any, P2PPort);
+        _fromEndPoint = new IPEndPoint(IPAddress.Any, P2PPort);
         _udpClient = new UdpClient();
-        _udpClient.Client.Bind(_endpoint);
-        var str = Encoding.UTF32.GetString(_udpClient.Receive(ref _endpoint));
+        _udpClient.Client.Bind(_fromEndPoint);
+        var str = Encoding.UTF32.GetString(_udpClient.Receive(ref _fromEndPoint));
         if (!str.StartsWith(MagicStringStart))
         {
             _udpClient.Close();
@@ -35,7 +38,15 @@ public class P2PTransmission : IDisposable
             goto retry;
         }
 
-        _udpClient.Send(new[] { (byte)MessageType.HelloConnected }, _endpoint);
+        var ourNewPort = PortHelper.NextFreePort(P2PPort);
+
+        var msg = new List<byte>
+        {
+            (byte)MessageType.HelloConnected,
+        };
+        msg.AddRange(MagicBytesA);
+        msg.AddRange(Encoding.UTF32.GetBytes(ourNewPort.ToString()));
+        _udpClient.Send(msg.ToArray());
     }
 
 
@@ -46,8 +57,8 @@ public class P2PTransmission : IDisposable
     public P2PTransmission(PeerId peer)
     {
         _udpClient = new UdpClient();
-        _endpoint = new IPEndPoint(peer.Address, P2PPort);
-        _udpClient.Connect(_endpoint);
+        _fromEndPoint = new IPEndPoint(peer.Address, P2PPort);
+        _udpClient.Connect(_fromEndPoint);
 
         var cts = new CancellationTokenSource();
 
@@ -90,16 +101,25 @@ public class P2PTransmission : IDisposable
 
         var resp = readTask.Result.Buffer;
         var msgType = (MessageType)resp[0];
-        if (msgType == MessageType.HelloConnected)
-        {
-            Connected = true;
-            sendThread.Join();
-            return;
-        }
+        if (msgType != MessageType.HelloConnected) ThrowInvalidResponse();
 
-        Dispose();
+        var magicBytes = resp[1..(MagicBytesALen + 1)];
+        if (!magicBytes.SequenceEqual(MagicBytesA)) ThrowInvalidResponse();
+        
+        var portStr = Encoding.UTF32.GetString(resp[(MagicBytesALen + 1)..]);
+        if (!int.TryParse(portStr, out var port)) ThrowInvalidResponse();
+
+        Connected = true;
         sendThread.Join();
-        throw new Exception("Client gave invalid response");
+
+        return;
+
+        void ThrowInvalidResponse()
+        {
+            Dispose();
+            sendThread?.Join();
+            throw new Exception("Client gave invalid response");
+        }
     }
 
     public bool Connected { get; private set; }
@@ -108,5 +128,28 @@ public class P2PTransmission : IDisposable
     public void Dispose()
     {
         Disposed = true;
+        Connected = false;
+    }
+}
+
+public static class PortHelper
+{
+    static bool IsFree(int port)
+    {
+        IPGlobalProperties properties = IPGlobalProperties.GetIPGlobalProperties();
+        IPEndPoint[] listeners = properties.GetActiveTcpListeners();
+        int[] openPorts = listeners.Select(item => item.Port).ToArray<int>();
+        return openPorts.All(openPort => openPort != port);
+    }
+
+    public static int NextFreePort(int port = 0)
+    {
+        port = (port > 0) ? port : new Random().Next(1, 65535);
+        while (!IsFree(port))
+        {
+            port += 1;
+        }
+
+        return port;
     }
 }
