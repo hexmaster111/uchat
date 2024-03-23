@@ -1,4 +1,5 @@
-﻿using µchat;
+﻿using System.Security.Cryptography;
+using µchat;
 
 string name = "Hailey";
 List<Message> messages = new();
@@ -30,11 +31,9 @@ void DoCommand(string sayLine)
     Console.Write('\b');
     for (var i = 0; i < sayLine.Length; i++) Console.Write('\b');
 
-    Console.WriteLine(
-        """
-        Commands:
-        (O)nline -- List the users who we have seen.
-        """);
+    Console.WriteLine(@"Commands:
+                      (O)nline -- List the users who we have seen.
+                      ");
 
     var cmd = Console.ReadKey();
     Console.Write('\b');
@@ -60,7 +59,6 @@ void DoCommand(string sayLine)
 
 void SendMessage(string msg)
 {
-    
 }
 
 void DoCli()

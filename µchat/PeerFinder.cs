@@ -34,7 +34,7 @@ public class PeerFinder
             MulticastLoopback = false
         };
 
-        _c.Client.Bind(new IPEndPoint(IPAddress.Parse("192.168.1.36"), Port));
+        _c.Client.Bind(new IPEndPoint(IPAddress.Any, Port));
         _listenrTask = Task.Run(PeerDetectorMethod);
 
         _sendTmr = new(SendToEveryone);

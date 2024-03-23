@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
@@ -9,7 +10,10 @@ public class P2PTransmission
     private const int P2PPort = 5250;
     private const string MagicStringStart = "µchat-hps-ms-";
 
-    private int _port;
+    enum MessageType : byte
+    {
+        HelloConnected = 0x01
+    }
 
     /// <summary>
     ///     Construct a new P2PTransmission listener
@@ -19,15 +23,16 @@ public class P2PTransmission
         retry:
         var endpoint = new IPEndPoint(IPAddress.Any, P2PPort);
         var udpClient = new UdpClient();
-        var data = udpClient.Receive(ref endpoint);
-        var dataStr = Encoding.UTF32.GetString(data);
-        if (!dataStr.StartsWith(MagicStringStart))
+        udpClient.Client.Bind(endpoint);
+        var str = Encoding.UTF32.GetString(udpClient.Receive(ref endpoint));
+        if (!str.StartsWith(MagicStringStart))
         {
             udpClient.Close();
             udpClient.Dispose();
             goto retry;
         }
-        // udpClient.Client.SendTo(send,endpoint);
+        
+        udpClient.Send(new[] { (byte)MessageType.HelloConnected }, endpoint);
     }
 
 
